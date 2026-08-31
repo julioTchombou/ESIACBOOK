@@ -6,6 +6,7 @@ from .permissions import IsProfessorOrReadOnly, IsOwnerOrReadOnly
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from subscriptions.models import Subscription  # Ajouté pour filtrer selon les abonnements
+from users.models import create_notification
 
 class ResourceListCreateView(generics.ListCreateAPIView):
     serializer_class = ResourceSerializer
@@ -34,14 +35,33 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         # Vérifie que seul un professeur peut uploader
         if self.request.user.role != 'professor':
             raise permissions.PermissionDenied("Seuls les professeurs peuvent uploader des ressources.")
-        serializer.save(uploaded_by=self.request.user)
+
+        resource = serializer.save(uploaded_by=self.request.user)
+
+        subscribers = Subscription.objects.filter(professor=self.request.user)
+        for subscription in subscribers:
+            create_notification(
+                subscription.student,
+                'Nouveau cours publié',
+                f'{self.request.user.get_full_name() or self.request.user.username} a publié un nouveau cours : {resource.title}.',
+            )
+
+        create_notification(
+            self.request.user,
+            'Cours publié',
+            f'Votre cours "{resource.title}" a bien été publié.',
+        )
 
 class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Resource.objects.all()
+   
     serializer_class = ResourceSerializer
     permission_classes = [IsProfessorOrReadOnly, IsOwnerOrReadOnly]
 
-    def get_serializer_class(self):
-        if self.request.method in ['PUT', 'PATCH']:
-            return ResourceCreateUpdateSerializer
-        return ResourceSerializer
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'student':
+            prof_ids = Subscription.objects.filter(student=user).values_list('professor_id', flat=True)
+            return Resource.objects.filter(uploaded_by__id__in=prof_ids)
+        elif user.role == 'professor':
+            return Resource.objects.filter(uploaded_by=user)
+        return Resource.objects.all()  # admin

@@ -68,6 +68,14 @@ class ProfessorSubscribersView(APIView):
                     {'detail': 'Accès réservé aux professeurs.'}, 
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+            # Un professeur non encore validé par un admin n'a pas accès à la liste
+            # de ses abonnés (données personnelles d'étudiants).
+            if not user.is_verified:
+                return Response(
+                    {'detail': "Votre compte professeur est en attente de validation par un administrateur."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
             subscriptions = Subscription.objects.filter(professor=user)
             

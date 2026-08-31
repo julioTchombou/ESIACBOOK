@@ -1,6 +1,7 @@
 # subscriptions/serializers.py
 from rest_framework import serializers
 from .models import Subscription
+from users.models import create_notification
 from users.serializers import CustomUserSerializer # Pour afficher les détails de l'étudiant/professeur
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -48,4 +49,16 @@ class CreateSubscriptionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Vous êtes déjà abonné à ce professeur.")
 
         subscription = Subscription.objects.create(student=student, professor=professor, **validated_data)
+
+        create_notification(
+            professor,
+            'Nouvel abonnement',
+            f'{student.get_full_name() or student.username} s\'est abonné à votre profil.',
+        )
+        create_notification(
+            student,
+            'Abonnement enregistré',
+            f'Vous êtes maintenant abonné à {professor.get_full_name() or professor.username}.',
+        )
+
         return subscription

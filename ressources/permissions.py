@@ -3,7 +3,7 @@ from rest_framework import permissions
 
 class IsProfessorOrReadOnly(permissions.BasePermission):
     """
-    Permission personnalisée pour n'autoriser que les professeurs
+    Permission personnalisée pour n'autoriser que les professeurs VÉRIFIÉS
     à créer, modifier ou supprimer des ressources.
     La lecture est autorisée pour tous les utilisateurs authentifiés.
     """
@@ -12,10 +12,16 @@ class IsProfessorOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return request.user and request.user.is_authenticated
 
-        # Les requêtes POST, PUT, PATCH, DELETE ne sont autorisées que si l'utilisateur est un professeur.
-        # Un admin (superutilisateur ou role='admin') peut aussi effectuer ces actions.
-        return (request.user and request.user.is_authenticated and
-                (request.user.role == 'professor' or request.user.is_superuser or request.user.role == 'admin'))
+        # Les requêtes POST, PUT, PATCH, DELETE ne sont autorisées que si l'utilisateur est un
+        # professeur VÉRIFIÉ par un admin (voir CustomUser.is_verified). Un compte professeur
+        # fraîchement inscrit et non encore validé n'a donc pas ce privilège.
+        # Un admin (superutilisateur ou role='admin') peut toujours effectuer ces actions.
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_superuser or user.role == 'admin':
+            return True
+        return user.role == 'professor' and user.is_verified
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -36,3 +42,4 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
         # Les requêtes d'écriture (PUT, PATCH, DELETE) ne sont autorisées qu'au propriétaire de la ressource.
         return obj.uploaded_by == request.user
+ 
